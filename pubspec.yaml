@@ -63,7 +63,7 @@ dev_dependencies:
   path_provider_platform_interface: ^2.1.2
 
 dependency_overrides:
-  skeletonizer: 2.1.3
+  skeletonizer: 1.4.0
   liquid_glass_widgets: 0.18.4
   signals: 6.3.0
   signals_flutter: 6.3.0

@@ -2,38 +2,45 @@ name: Build Android APK
 
 on:
   push:
-    branches: [main, fix/*]
+    branches:
+      - 'fix/**'
   pull_request:
-    branches: [main]
-  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      
-      - name: Setup Flutter
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter 3.47.7 stable
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.29.0'
-          channel: 'stable'
+          channel: stable
+          flutter-version: '3.47.7'
           cache: true
-      
-      - name: Clear pub cache
-        run: |
-          echo "y" | flutter pub cache clean
-          rm -f pubspec.lock
-      
+
+      - name: Install Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Flutter doctor
+        run: flutter doctor -v
+
+      - name: Clear pub cache (non-interactive)
+        run: echo "y" | flutter pub cache clean || true
+
       - name: Get dependencies
         run: flutter pub get
-      
-      - name: Build APK
-        run: flutter build apk --release --split-per-abi
-      
-      - name: Upload APK artifacts
+
+      - name: Build APK (release)
+        run: flutter build apk --release
+
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-apk
+          name: feiniu-music-apk
           path: build/app/outputs/flutter-apk/*.apk
-          retention-days: 7
+          retention-days: 14

@@ -20,6 +20,11 @@ jobs:
           channel: 'stable'
           cache: true
       
+      - name: Clear pub cache
+        run: |
+          flutter pub cache clean
+          rm -f pubspec.lock
+      
       - name: Get dependencies
         run: flutter pub get
       

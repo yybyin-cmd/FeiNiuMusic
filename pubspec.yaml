@@ -70,7 +70,7 @@ dependencies:
   cached_network_image: ^3.4.1
   flutter_cache_manager: ^3.4.1
   connectivity_plus: ^7.3.1
-  media_cast_dlna: ^0.3.1
+
   webview_flutter: ^4.10.0
   webview_flutter_android: ^4.13.0
   # Windows 桌面端 sqflite 需走 ffi（系统 winsqlite3.dll）。从 dev 提升为
@@ -90,7 +90,7 @@ dev_dependencies:
   # activated in the `analysis_options.yaml` file located at the root of your
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
-  flutter_lints: ^5.0.0
+  flutter_lints: ^6.0.0
   flutter_launcher_icons: ^0.14.3
   path_provider_platform_interface: ^2.1.2
 

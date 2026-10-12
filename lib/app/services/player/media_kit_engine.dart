@@ -158,7 +158,7 @@ class MediaKitEngine implements PlayerEngine {
       await configureMediaKitDesktopAudioOnly(
         setProperty: (property, value) async {
           try {
-            await player.setProperty(property, value);
+            await player.platform.setProperty(property, value);
           } catch (e) {
             debugPrint('[MediaKitEngine] setProperty $property failed: $e');
             rethrow;
@@ -188,9 +188,9 @@ class MediaKitEngine implements PlayerEngine {
       if (!await cacheDir.exists()) {
         await cacheDir.create(recursive: true);
       }
-      await player.setProperty('cache-dir', cacheDir.path);
-      await player.setProperty('cache', 'yes');
-      await player.setProperty('cache-secs', '300'); // 5分钟缓存
+      await player.platform.setProperty('cache-dir', cacheDir.path);
+      await player.platform.setProperty('cache', 'yes');
+      await player.platform.setProperty('cache-secs', '300'); // 5分钟缓存
       debugPrint('[MediaKitEngine] cache-dir configured: ${cacheDir.path}');
     } catch (e) {
       debugPrint('[MediaKitEngine] configure cache-dir failed: $e');
@@ -201,9 +201,9 @@ class MediaKitEngine implements PlayerEngine {
   Future<void> _configureTls(mk.Player player) async {
     try {
       // 允许自签名证书 / 跳过证书验证（仅转码代理场景，内网环境）
-      await player.setProperty('tls-verify', 'no');
+      await player.platform.setProperty('tls-verify', 'no');
       // 禁用 HTTP/2（某些代理/转码服务不支持）
-      await player.setProperty('http-version', '1.1');
+      await player.platform.setProperty('http-version', '1.1');
       debugPrint('[MediaKitEngine] TLS configured: verify=no, http-version=1.1');
     } catch (e) {
       debugPrint('[MediaKitEngine] TLS config failed: $e');

@@ -443,7 +443,19 @@ class MediaKitEngine implements PlayerEngine {
     if (p == null) return;
     // CUE 裁剪曲目：相对 seek 目标换算回整轨绝对位置，mpv 才能定位到
     // 裁剪段内正确的点（否则会落到整轨文件的前面部分）。
-    await p.seek(absoluteCroppedSeekTarget(position, _currentItemStart()));
+    // 失败重试一次：mpv 在切歌/preload 竞态下偶发
+    // `error running command _command(seek, ...)`，重试可避免拖动无效。
+    try {
+      await p.seek(absoluteCroppedSeekTarget(position, _currentItemStart()));
+    } catch (e) {
+      debugPrint('[MediaKitEngine] seek failed, retrying once: $e');
+      try {
+        await Future<void>.delayed(const Duration(milliseconds: 120));
+        await p.seek(absoluteCroppedSeekTarget(position, _currentItemStart()));
+      } catch (e2) {
+        rethrow;
+      }
+    }
   }
 
   @override

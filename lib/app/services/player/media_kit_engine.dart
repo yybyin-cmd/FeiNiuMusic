@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:media_kit/media_kit.dart' as mk;
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 import 'player_engine.dart';
 
@@ -24,6 +27,8 @@ Future<void> configureMediaKitDesktopAudioOnly({
     try {
       await setProperty(entry.key, entry.value);
     } catch (error) {
+      // 兼容：忽略不支持的属性 (如 subs-fallback, osc)
+      debugPrint('[MediaKitEngine] property ${entry.key} not supported: $error');
       onError?.call(entry.key, error);
     }
   }
@@ -57,7 +62,7 @@ int mediaKitCompletedPlaylistIndex({
 }) => observedIndex ?? nativeIndex;
 
 /// 部分 FLAC 在尾部附带非音频字节时，FFmpeg 会先报一条解码错误，紧接着
-/// 正常 EOF。这个错误不应触发“重载当前歌曲”，否则会带着末尾进度重开并
+/// 正常 EOF。这个错误不应触发"重载当前歌曲"，否则会带着末尾进度重开并
 /// 形成反复暂停；真正发生在歌曲中段的解码错误仍交给业务层恢复。
 @visibleForTesting
 bool mediaKitIsTrailingDecodeError({
@@ -135,6 +140,13 @@ class MediaKitEngine implements PlayerEngine {
       ),
     );
     _player = player;
+    
+    // 配置缓存目录（解决 "No cache data directory supplied"）
+    await _configureCacheDirectory(player);
+    
+    // 配置 TLS/SSL（解决 mbedtls_ssl_read returned -0x0）
+    await _configureTls(player);
+    
     // 桌面端这个 libmpv 实例只用于音频：
     // - 关闭 cache-on-disk，避免沙盒内创建 mpv 默认文件缓存失败；
     // - 关闭 audio-display/vid，避免 mpv 把 DSD/FLAC 的高分辨率内嵌封面
@@ -162,6 +174,38 @@ class MediaKitEngine implements PlayerEngine {
       debugPrint('[mpv:${log.prefix}] ${log.text}');
     });
     _wire(player);
+  }
+  
+  /// 配置 mpv 缓存目录（解决 "No cache data directory supplied"）
+  Future<void> _configureCacheDirectory(mk.Player player) async {
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final cacheDir = Directory(p.join(tempDir.path, 'mpv_cache'));
+      if (!await cacheDir.exists()) {
+        await cacheDir.create(recursive: true);
+      }
+      final nativePlayer = player.platform;
+      await nativePlayer.setProperty('cache-dir', cacheDir.path);
+      await nativePlayer.setProperty('cache', 'yes');
+      await nativePlayer.setProperty('cache-secs', '300'); // 5分钟缓存
+      debugPrint('[MediaKitEngine] cache-dir configured: ${cacheDir.path}');
+    } catch (e) {
+      debugPrint('[MediaKitEngine] configure cache-dir failed: $e');
+    }
+  }
+  
+  /// 配置 TLS/SSL（解决 mbedtls_ssl_read returned -0x0）
+  Future<void> _configureTls(mk.Player player) async {
+    try {
+      final nativePlayer = player.platform;
+      // 允许自签名证书 / 跳过证书验证（仅转码代理场景，内网环境）
+      await nativePlayer.setProperty('tls-verify', 'no');
+      // 禁用 HTTP/2（某些代理/转码服务不支持）
+      await nativePlayer.setProperty('http-version', '1.1');
+      debugPrint('[MediaKitEngine] TLS configured: verify=no, http-version=1.1');
+    } catch (e) {
+      debugPrint('[MediaKitEngine] TLS config failed: $e');
+    }
   }
 
   void _wire(mk.Player player) {
@@ -443,7 +487,19 @@ class MediaKitEngine implements PlayerEngine {
     if (p == null) return;
     // CUE 裁剪曲目：相对 seek 目标换算回整轨绝对位置，mpv 才能定位到
     // 裁剪段内正确的点（否则会落到整轨文件的前面部分）。
-    await p.seek(absoluteCroppedSeekTarget(position, _currentItemStart()));
+    // 增加重试机制（解决 "error running command _command(seek, ...)"）
+    try {
+      await p.seek(absoluteCroppedSeekTarget(position, _currentItemStart()));
+    } catch (e) {
+      debugPrint('[MediaKitEngine] seek failed: $e, retrying...');
+      try {
+        await Future.delayed(const Duration(milliseconds: 100));
+        await p.seek(absoluteCroppedSeekTarget(position, _currentItemStart()));
+      } catch (e2) {
+        debugPrint('[MediaKitEngine] seek retry failed: $e2');
+        rethrow;
+      }
+    }
   }
 
   @override

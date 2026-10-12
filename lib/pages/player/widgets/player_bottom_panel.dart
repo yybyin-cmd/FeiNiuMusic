@@ -1064,7 +1064,7 @@ class _PlaylistSheetState extends State<_PlaylistSheet> {
                               // 注意不能传 null：ReorderableListView.builder 的构造
                               // 断言要求 onReorderItem 非 null（否则断言失败，且因
                               // 处于 Watch.builder 内会被包装成 SignalEffectException）。
-                              onReorderItem: (oldIndex, newIndex) {
+                              onReorder: (oldIndex, newIndex) {
                                 if (mode == PlaybackMode.shuffle) return;
                                 widget.player.reorderQueue(
                                   oldIndex,
@@ -1565,3 +1565,4 @@ void showPosterSongDetailSheet(BuildContext context, PlayerService player) {
     ),
   );
 }
+

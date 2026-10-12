@@ -2,9 +2,12 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:signals/signals.dart';
+import 'package:signals_flutter/signals_flutter.dart' hide computed;
 
 import '../../../app/services/player_service.dart';
 import '../../../components/feedback/app_toast.dart';
+import '../../../models/song_entity.dart';
 
 /// 播放页右上角投屏按钮（存根：DLNA 功能已移除，保留占位）。
 class CastButton extends StatelessWidget {

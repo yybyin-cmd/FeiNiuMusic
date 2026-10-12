@@ -12,8 +12,31 @@ import 'player_engine.dart';
 /// Android ExoPlayer 原生发送（DefaultHttpDataSource），而不是走 just_audio
 /// 的 Dart 本地代理（代理不解析 `#EXT-X-MAP`，且会用 Dart HttpClient 连 NAS
 /// IPv6 导致不可达）。
+///
+/// 缓冲参数（`AndroidLoadControl`，经官方 `AudioLoadConfiguration` 传入）：
+/// 针对「服务器转码 HLS 缓冲到一半停」问题调大预缓冲窗口——
+/// - `minBufferDuration` 60s / `maxBufferDuration` 150s：转码流是低码率
+///   （32~128kbps），150s 最多几 MB 内存，ExoPlayer 会尽量多预缓冲，而不是
+///   按默认 50s 封顶提前停住；
+/// - `bufferForPlaybackAfterRebufferDuration` 15s：默认仅 5s——断流后只重缓冲
+///   5s 就续播，网络一抖就反复卡。15s 让重连后攒够余量再播，减少反复顿挫；
+/// - `prioritizeTimeOverSizeThresholds: true`：按时间阈值优先，避免 HLS 大
+///   分段被默认字节阈值卡住预缓冲。
 class JustAudioEngine implements PlayerEngine {
-  JustAudioEngine() : _player = AudioPlayer(useProxyForRequestHeaders: false);
+  JustAudioEngine()
+      : _player = AudioPlayer(
+          useProxyForRequestHeaders: false,
+          audioLoadConfiguration: AudioLoadConfiguration(
+            androidLoadControl: AndroidLoadControl(
+              minBufferDuration: const Duration(seconds: 60),
+              maxBufferDuration: const Duration(seconds: 150),
+              bufferForPlaybackDuration: const Duration(seconds: 3),
+              bufferForPlaybackAfterRebufferDuration:
+                  const Duration(seconds: 15),
+              prioritizeTimeOverSizeThresholds: true,
+            ),
+          ),
+        );
 
   final AudioPlayer _player;
 

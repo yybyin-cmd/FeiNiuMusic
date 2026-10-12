@@ -182,6 +182,7 @@ class FeiNiuTranscodeService {
   /// 播放中断后客户端从头重载（「缓冲到一半从头播」）。官方客户端有心跳，
   /// 本实现补齐。会话 quit/invalidate 时取消对应定时器。
   final Map<String, Timer> _heartbeatTimers = {};
+  final Map<String, int> _heartbeatCounts = {};
 
   static const Duration _heartbeatInterval = Duration(seconds: 30);
 
@@ -486,11 +487,14 @@ class FeiNiuTranscodeService {
   /// 为活动转码会话启动周期心跳（幂等：已有定时器则跳过）。
   void _ensureHeartbeat(String songId) {
     if (_heartbeatTimers.containsKey(songId)) return;
-    final timer = Timer.periodic(_heartbeatInterval, (_) {
+    final timer = Timer.periodic(_heartbeatInterval, (timer) {
       // best-effort：心跳失败（会话已死/网络抖）停止本会话心跳，
       // 播放错误恢复路径会重新转码；服务端也有超时兜底。
+      // timestamp 是必填字段（服务端 required，缺了 400 拒绝），
+      // 官方客户端上报播放进度秒；此处用自增计数（非零恒成立）。
+      final timestamp = _heartbeatCounts[songId] = (_heartbeatCounts[songId] ?? 0) + 1;
       unawaited(
-        _api.trackTranscodeHeartbeat(songId).catchError((_) {
+        _api.trackTranscodeHeartbeat(songId, timestamp: timestamp).catchError((_) {
           _stopHeartbeat(songId);
         }),
       );
@@ -502,6 +506,7 @@ class FeiNiuTranscodeService {
   void _stopHeartbeat(String songId) {
     final timer = _heartbeatTimers.remove(songId);
     timer?.cancel();
+    _heartbeatCounts.remove(songId);
   }
 
   Future<void> _quitIds(Iterable<String> ids) async {
@@ -694,6 +699,7 @@ class FeiNiuTranscodeService {
       timer.cancel();
     }
     _heartbeatTimers.clear();
+    _heartbeatCounts.clear();
     _cache.clear();
     _formatInflight.clear();
     _formats.clear();
@@ -710,6 +716,7 @@ class FeiNiuTranscodeService {
       timer.cancel();
     }
     _heartbeatTimers.clear();
+    _heartbeatCounts.clear();
     _api = FeiNiuApiClient.instance;
     _cache.clear();
     _formatInflight.clear();

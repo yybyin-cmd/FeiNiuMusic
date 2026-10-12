@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 
 import '../../../app/services/feiniu/api_client.dart';
 import '../../../app/services/feiniu/api_models.dart';
@@ -372,7 +373,11 @@ class _LargeScrollableSongList extends StatelessWidget {
         final trailingDuration =
             constraints.maxWidth >= 240 * scale * textScale;
         return ListView.separated(
-          // TV: 移除 scrollCacheExtent (Flutter 3.29 不支持)
+          // TV：加大预建范围，保证方向键能遍历到视口外的行（不会因行未 build
+          // 而找不到下一焦点目标，误跳出列表跳到下方专辑）。
+          scrollCacheExtent: isTv
+              ? const ScrollCacheExtent.pixels(600)
+              : const ScrollCacheExtent.pixels(0),
           padding: const EdgeInsets.symmetric(vertical: 4),
           itemCount: songs.length,
           separatorBuilder: (_, _) => SizedBox(height: 2 * scale),

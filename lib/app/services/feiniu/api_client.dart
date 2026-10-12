@@ -787,6 +787,15 @@ class FeiNiuApiClient {
     await _post('/track/transcode/quit', data: {'guid': guid});
   }
 
+  /// 续期服务器端转码会话（heartbeat）。
+  ///
+  /// 服务端转码会话有存活 TTL（约 2 分钟），必须定期心跳续期；不续期会被
+  /// 服务端清理（后续 HLS 分段 404 → 播放中断）。官方客户端实现了心跳，
+  /// 第三方客户端此前缺失 → 长歌播到一半断流。best-effort，失败忽略。
+  Future<void> trackTranscodeHeartbeat(String guid) async {
+    await _post('/track/transcode/heartbeat', data: {'guid': guid});
+  }
+
   /// 拼接 HLS 绝对地址：服务器返回相对路径（以 /music/api/v1 开头）时
   /// 拼上 baseUrl，绝对地址原样返回。
   String resolveHlsUrl(String rel) {

@@ -22,7 +22,7 @@ jobs:
       
       - name: Clear pub cache
         run: |
-          flutter pub cache clean
+          echo "y" | flutter pub cache clean
           rm -f pubspec.lock
       
       - name: Get dependencies

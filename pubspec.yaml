@@ -64,7 +64,7 @@ dev_dependencies:
 
 dependency_overrides:
   skeletonizer: 1.4.0
-  liquid_glass_widgets: 0.15.0
+  liquid_glass_widgets: 0.5.0
   signals: 6.3.0
   signals_flutter: 6.3.0
   just_audio: 0.10.5

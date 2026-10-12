@@ -155,10 +155,14 @@ class MediaKitEngine implements PlayerEngine {
     // 使用服务器封面，因此禁用 mpv 封面显示不会影响播放页。
     if (defaultTargetPlatform == TargetPlatform.macOS ||
         defaultTargetPlatform == TargetPlatform.windows) {
-      final dynamic nativePlayer = player.platform;
       await configureMediaKitDesktopAudioOnly(
         setProperty: (property, value) async {
-          await nativePlayer.setProperty(property, value);
+          try {
+            await player.setProperty(property, value);
+          } catch (e) {
+            debugPrint('[MediaKitEngine] setProperty $property failed: $e');
+            rethrow;
+          }
         },
         onError: (property, error) {
           debugPrint(
@@ -184,10 +188,9 @@ class MediaKitEngine implements PlayerEngine {
       if (!await cacheDir.exists()) {
         await cacheDir.create(recursive: true);
       }
-      final nativePlayer = player.platform;
-      await nativePlayer.setProperty('cache-dir', cacheDir.path);
-      await nativePlayer.setProperty('cache', 'yes');
-      await nativePlayer.setProperty('cache-secs', '300'); // 5分钟缓存
+      await player.setProperty('cache-dir', cacheDir.path);
+      await player.setProperty('cache', 'yes');
+      await player.setProperty('cache-secs', '300'); // 5分钟缓存
       debugPrint('[MediaKitEngine] cache-dir configured: ${cacheDir.path}');
     } catch (e) {
       debugPrint('[MediaKitEngine] configure cache-dir failed: $e');
@@ -197,11 +200,10 @@ class MediaKitEngine implements PlayerEngine {
   /// 配置 TLS/SSL（解决 mbedtls_ssl_read returned -0x0）
   Future<void> _configureTls(mk.Player player) async {
     try {
-      final nativePlayer = player.platform;
       // 允许自签名证书 / 跳过证书验证（仅转码代理场景，内网环境）
-      await nativePlayer.setProperty('tls-verify', 'no');
+      await player.setProperty('tls-verify', 'no');
       // 禁用 HTTP/2（某些代理/转码服务不支持）
-      await nativePlayer.setProperty('http-version', '1.1');
+      await player.setProperty('http-version', '1.1');
       debugPrint('[MediaKitEngine] TLS configured: verify=no, http-version=1.1');
     } catch (e) {
       debugPrint('[MediaKitEngine] TLS config failed: $e');

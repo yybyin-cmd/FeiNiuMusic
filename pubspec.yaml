@@ -99,7 +99,7 @@ dependency_overrides:
   webview_flutter: 4.10.0
   webview_flutter_android: 4.10.15
   webview_flutter_platform_interface: 2.14.0
-  sqflite_common_ffi: 2.4.2
+  sqflite_common_ffi: 2.3.6
   tray_manager: 0.5.3
   window_manager: 0.5.2
   desktop_multi_window: 0.3.1

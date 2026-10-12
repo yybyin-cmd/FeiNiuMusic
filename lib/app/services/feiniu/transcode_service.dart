@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../network_connection_service.dart';
@@ -174,6 +176,14 @@ class FeiNiuTranscodeService {
 
   /// 当前活动转码会话（服务端正在转码的 guid）。
   final Set<String> _activeIds = {};
+
+  /// 活动转码会话的心跳定时器：服务端会话有 TTL（约 2 分钟），必须每
+  /// [_heartbeatInterval] 续期一次，否则被服务端清理 → HLS 后续分段 404 →
+  /// 播放中断后客户端从头重载（「缓冲到一半从头播」）。官方客户端有心跳，
+  /// 本实现补齐。会话 quit/invalidate 时取消对应定时器。
+  final Map<String, Timer> _heartbeatTimers = {};
+
+  static const Duration _heartbeatInterval = Duration(seconds: 30);
 
   /// 已降级到 mp3 的歌（flac 转码解析失败后，本会话不再尝试 flac）。
   final Set<String> _downgradedToMp3 = {};
@@ -402,6 +412,7 @@ class FeiNiuTranscodeService {
       final hit = _cache[key];
       if (hit != null && hit.isValid()) {
         _activeIds.add(song.id);
+        _ensureHeartbeat(song.id);
         return hit.url;
       }
       // 只有 flac 带 bitrate（320）；mp3/opus 不带——带 bitrate 会劣化音质。
@@ -416,6 +427,7 @@ class FeiNiuTranscodeService {
       final url = _api.resolveHlsUrl(rel);
       _cache[key] = _CachedHls(url, DateTime.now().add(_ttl));
       _activeIds.add(song.id);
+      _ensureHeartbeat(song.id);
       return url;
     } catch (_) {
       // 任何失败（转码请求异常等）→ 返回 null，由调用方退直连，不阻塞播放。
@@ -439,6 +451,7 @@ class FeiNiuTranscodeService {
       final hit = _cache[key];
       if (hit != null && hit.isValid()) {
         _activeIds.add(song.id);
+        _ensureHeartbeat(song.id);
         return hit.url;
       }
       // mp3 不带 bitrate（带 bitrate 会显著劣化音质）。
@@ -447,6 +460,7 @@ class FeiNiuTranscodeService {
       final url = _api.resolveHlsUrl(rel);
       _cache[key] = _CachedHls(url, DateTime.now().add(_ttl));
       _activeIds.add(song.id);
+      _ensureHeartbeat(song.id);
       return url;
     } catch (_) {
       // 任何失败 → 返回 null，由调用方退直连，不阻塞投屏。
@@ -469,10 +483,32 @@ class FeiNiuTranscodeService {
     return codec.toUpperCase();
   }
 
+  /// 为活动转码会话启动周期心跳（幂等：已有定时器则跳过）。
+  void _ensureHeartbeat(String songId) {
+    if (_heartbeatTimers.containsKey(songId)) return;
+    final timer = Timer.periodic(_heartbeatInterval, (_) {
+      // best-effort：心跳失败（会话已死/网络抖）停止本会话心跳，
+      // 播放错误恢复路径会重新转码；服务端也有超时兜底。
+      unawaited(
+        _api.trackTranscodeHeartbeat(songId).catchError((_) {
+          _stopHeartbeat(songId);
+        }),
+      );
+    });
+    _heartbeatTimers[songId] = timer;
+  }
+
+  /// 取消某会话的心跳定时器。
+  void _stopHeartbeat(String songId) {
+    final timer = _heartbeatTimers.remove(songId);
+    timer?.cancel();
+  }
+
   Future<void> _quitIds(Iterable<String> ids) async {
     final unique = ids.toSet();
     for (final id in unique) {
       _activeIds.remove(id);
+      _stopHeartbeat(id);
       _removeCacheFor(id);
     }
     for (final id in unique) {
@@ -574,6 +610,7 @@ class FeiNiuTranscodeService {
     _codecs.remove(songId);
     _sizes.remove(songId);
     _activeIds.remove(songId);
+    _stopHeartbeat(songId);
   }
 
   String _cacheKey(String songId, String codec) => '$songId|$codec';
@@ -653,6 +690,10 @@ class FeiNiuTranscodeService {
 
   @visibleForTesting
   void clearCacheForTest() {
+    for (final timer in _heartbeatTimers.values) {
+      timer.cancel();
+    }
+    _heartbeatTimers.clear();
     _cache.clear();
     _formatInflight.clear();
     _formats.clear();
@@ -665,6 +706,10 @@ class FeiNiuTranscodeService {
 
   @visibleForTesting
   void resetForTest() {
+    for (final timer in _heartbeatTimers.values) {
+      timer.cancel();
+    }
+    _heartbeatTimers.clear();
     _api = FeiNiuApiClient.instance;
     _cache.clear();
     _formatInflight.clear();
